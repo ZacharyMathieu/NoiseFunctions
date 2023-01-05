@@ -1,18 +1,13 @@
 const sharp = require("sharp");
 const fs = require("fs");
-// const ffmpeg = require('ffmpeg');
-const ffmpeg = require('fluent-ffmpeg');
-const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
-const ffprobePath = require('@ffprobe-installer/ffprobe').path;
-
-ffmpeg.setFfmpegPath(ffmpegPath);
-ffmpeg.setFfprobePath(ffprobePath);
+const {exec} = require("child_process");
 
 const generateVideoMode = process.argv[2] === "video";
 const loadSeedMode = process.argv[2] === "load";
 
-const outFile = "out";
+const outFile = "Cover Humanity";
 
+// const generateImageCount = 100;
 const generateImageCount = 4140;
 
 const multiChannelSeeds = true; // Black and white: false, colors: true
@@ -26,8 +21,9 @@ const width = 1000;
 const height = 1000;
 
 const finalVideoPath = `${outFile}/videoOut.mp4`;
-// const frameRate = 30;
-const frameRate = 1;
+const frameRate = 30;
+
+// const frameRate = 50;
 
 function getSeed() {
     return {
@@ -158,38 +154,22 @@ function getPixelArray(pixels) {
 }
 
 async function generateVideo() {
-    const images = [];
-
     const files = fs.readdirSync(outFile);
+    if (files.find((s) => s === finalVideoPath) !== undefined) fs.rmSync(finalVideoPath);
 
-    files.sort((a, b) => {
-        return parseInt(a) - parseInt(b);
-    })
-
-    for (let i in files) {
-        if (files[i].endsWith(".png"))
-            // images.push({path: `${outFile}/${files[i]}`, loop: secondsToShowEachImage});
-            images.push(`${outFile}/${files[i]}`);
-    }
-
-    console.log(images);
-    try {
-        const ffmpegCommand = ffmpeg();
-        for (let i in images) {
-            ffmpegCommand.input(images[i])
-                .inputOptions(`-framerate ${frameRate}`)
-                .duration(images.length * frameRate * 100)
-                .fps(frameRate);
-        }
-        ffmpegCommand
-            .videoCodec('libx264')
-            .outputOptions([
-                '-pix_fmt yuv420p'
-            ])
-            .saveToFile(finalVideoPath);
-    } catch (err) {
-        console.log("ERR CAUGHT", err);
-    }
+    let imageFormatSize = (files.length - 1).toString().length;
+    await exec(`ffmpeg -framerate ${frameRate} -i "${outFile}/%${imageFormatSize}d.png" -c:v libx264 -pix_fmt yuv420p "${finalVideoPath}"`,
+        (error, stdout, stderr) => {
+            if (error) {
+                console.log(`error: ${error.message}`);
+                return;
+            }
+            if (stderr) {
+                console.log(`stderr: ${stderr}`);
+                return;
+            }
+            console.log(`stdout: ${stdout}`);
+        });
 }
 
 (async () => {
@@ -223,6 +203,7 @@ async function generateVideo() {
             ySeedB = seeds["ySeedB"];
         }
 
+        const requiredOutputLength = generateImageCount.toString().length;
         for (let imageIndex = 0; imageIndex < generateImageCount; imageIndex++) {
             console.log(`Generating image ${imageIndex} / ${generateImageCount}`);
 
@@ -250,7 +231,11 @@ async function generateVideo() {
                     channels: 4
                 }
             });
-            await sharpImage.toFile(`${outFile}/${imageIndex}.png`);
+
+            let outFileName = imageIndex.toString();
+            while (outFileName.length < requiredOutputLength) outFileName = "0" + outFileName;
+
+            await sharpImage.toFile(`${outFile}/${outFileName}.png`);
 
             modifySeeds();
         }
