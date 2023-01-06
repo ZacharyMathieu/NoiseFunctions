@@ -2,18 +2,26 @@ const sharp = require("sharp");
 const fs = require("fs");
 const {exec} = require("child_process");
 
-const generateVideoMode = process.argv[2] === "video";
-const loadSeedMode = process.argv[2] === "load";
+if (process.argv[2] === undefined) throw SyntaxError("Action specification required (new/load/video)");
 
-const outFile = "Cover Humanity";
+const newSeedMode = process.argv[2] === "new";
+const loadSeedMode = process.argv[2] === "load";
+const generateVideoMode = process.argv[2] === "video";
+const renameFilesMode = process.argv[2] === "rename";
+
+const startIndex = process.argv[3] ?? 0;
+
+const outFile = "out";
 
 // const generateImageCount = 100;
-const generateImageCount = 4140;
+const generateImageCount = 4200;
 
 const multiChannelSeeds = true; // Black and white: false, colors: true
 const seedCount = 3; // Between 1 and 10 (greatly affects performance)
 const seedMultiplier = 500; // Between 1 and width or 1 and height
-const seedFrequencyMod = 0.02; // Between 0 and seedMultiplier / 100 for better results
+// How much the frequency can change between each image
+const seedFrequencyMod = 0.5; // Between 0 and seedMultiplier / 100 for better results
+// How much the offset can change between each image
 const seedOffsetMod = 0.02; // Between 0 and 0.25 for better results
 const seedFalloff = 10; // Between 0 and infinity for smaller changes from seeds after the first one
 
@@ -175,8 +183,27 @@ async function generateVideo() {
 (async () => {
     if (generateVideoMode) {
         await generateVideo();
+    } else if (renameFilesMode) {
+        const files = fs.readdirSync(outFile);
+        const requiredLength = generateImageCount.toString().length;
+
+        for (let i in files) {
+            const splitFile = files[i].split(".");
+            if (splitFile[0].length < requiredLength) {
+                let newName = splitFile[0];
+                while (newName.length < requiredLength) newName = "0" + newName;
+
+                fs.renameSync(`${outFile}/${files[i]}`, `${outFile}/${newName}.${splitFile[1]}`);
+            }
+        }
     } else {
-        if (!loadSeedMode) {
+        const files = fs.readdirSync(outFile);
+        for (let i in files) {
+            const splitF = files[i].split(".");
+            if (splitF[1] !== "json" && parseInt(splitF[0]) >= startIndex) fs.rmSync(`${outFile}/${files[i]}`);
+        }
+
+        if (newSeedMode) {
             generateSeeds();
 
             const seeds = {
@@ -189,11 +216,10 @@ async function generateVideo() {
             }
 
             fs.writeFileSync(`${outFile}/seeds.json`, JSON.stringify(seeds));
-        } else {
+        } else if (loadSeedMode) {
             const seeds = JSON.parse(fs.readFileSync(`${outFile}/seeds.json`).toString());
 
-            console.log("loading seeds");
-            console.log(seeds);
+            console.log("loading seeds from file");
 
             xSeedR = seeds["xSeedR"];
             xSeedG = seeds["xSeedG"];
@@ -205,37 +231,41 @@ async function generateVideo() {
 
         const requiredOutputLength = generateImageCount.toString().length;
         for (let imageIndex = 0; imageIndex < generateImageCount; imageIndex++) {
-            console.log(`Generating image ${imageIndex} / ${generateImageCount}`);
+            if (imageIndex < startIndex) {
+                console.log(`Skipping image ${imageIndex} / ${generateImageCount}`);
+            } else {
+                console.log(`Generating image ${imageIndex} / ${generateImageCount}`);
 
-            const pixels = Array(height);
-            for (let y = 0; y < pixels.length; y++) {
-                pixels[y] = Array(width);
-                for (let x = 0; x < pixels[y].length; x++) {
-                    pixels[y][x] = {
-                        r: 255,
-                        g: 255,
-                        b: 255,
-                        a: 255
-                    };
+                const pixels = Array(height);
+                for (let y = 0; y < pixels.length; y++) {
+                    pixels[y] = Array(width);
+                    for (let x = 0; x < pixels[y].length; x++) {
+                        pixels[y][x] = {
+                            r: 255,
+                            g: 255,
+                            b: 255,
+                            a: 255
+                        };
+                    }
                 }
+
+                addColor(pixels);
+
+                const pixelArray = getPixelArray(pixels);
+
+                const sharpImage = sharp(new Buffer.from(pixelArray), {
+                    raw: {
+                        width: width,
+                        height: height,
+                        channels: 4
+                    }
+                });
+
+                let outFileName = imageIndex.toString();
+                while (outFileName.length < requiredOutputLength) outFileName = "0" + outFileName;
+
+                await sharpImage.toFile(`${outFile}/${outFileName}.png`);
             }
-
-            addColor(pixels);
-
-            const pixelArray = getPixelArray(pixels);
-
-            const sharpImage = sharp(new Buffer.from(pixelArray), {
-                raw: {
-                    width: width,
-                    height: height,
-                    channels: 4
-                }
-            });
-
-            let outFileName = imageIndex.toString();
-            while (outFileName.length < requiredOutputLength) outFileName = "0" + outFileName;
-
-            await sharpImage.toFile(`${outFile}/${outFileName}.png`);
 
             modifySeeds();
         }
