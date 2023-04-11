@@ -16,29 +16,86 @@ const outFile = "out";
 // const generateImageCount = 100;
 const generateImageCount = 4200;
 
-const multiChannelSeeds = true; // Black and white: false, colors: true
-const seedCount = 3; // Between 1 and 10 (greatly affects performance)
-const seedMultiplier = 500; // Between 1 and width or 1 and height
+const maxFrequency = 0.005;
+
+// Black and white: false, colors: true
+const multiChannelSeeds = false;
+// Between 1 and 10 (greatly affects performance)
+const seedCount = 10;
+// Between 1 and width or 1 and height
+const seedFrequencyMultiplier = 0.005;
 // How much the frequency can change between each image
-const seedFrequencyMod = 0.5; // Between 0 and seedMultiplier / 100 for better results
+// Between 0 and seedFrequencyMultiplier / 100 for better results
+const seedFrequencyMod = seedFrequencyMultiplier / 50;
+// How close the frequencyMod needs to be to the target to trigger a switch
+const seedFrequencyModTransitionRange = maxFrequency / 500;
+const seedFrequencyModTransitionFrequencyWeight = 50;
+const seedFrequencyModTransitionTargetWeight = 1;
 // How much the offset can change between each image
-const seedOffsetMod = 0.02; // Between 0 and 0.25 for better results
-const seedFalloff = 10; // Between 0 and infinity for smaller changes from seeds after the first one
+// Between 0 and 0.25 for better results
+const seedOffsetMod = seedFrequencyMod / 2;
+// Between 0 and infinity for smaller changes from seeds after the first one
+const subSeedFalloff = 0.5;
+// Between 0 and infinity for smaller changes from seeds after the first one
+const subSeedFrequencyMultiplier = 5;
 
 const width = 1000;
 const height = 1000;
+// const width = 100;
+// const height = 100;
 
 const finalVideoPath = `${outFile}/videoOut.mp4`;
 const frameRate = 30;
 
 // const frameRate = 50;
 
+// The colors used to convert black and white pixels to something with color
+const colorSteps = [
+    {
+        r: 1,
+        g: 0,
+        b: 0
+    },
+    {
+        r: 1,
+        g: 1,
+        b: 0
+    },
+    {
+        r: 0,
+        g: 1,
+        b: 0
+    },
+    {
+        r: 0,
+        g: 1,
+        b: 1
+    },
+    {
+        r: 0,
+        g: 0,
+        b: 1
+    },
+    {
+        r: 1,
+        g: 0,
+        b: 1
+    },
+    {
+        r: 1,
+        g: 0,
+        b: 0
+    },
+];
+
 function getSeed() {
+    let frequencyMod = (Math.random() * (seedFrequencyMod * 2)) - seedFrequencyMod
     return {
-        frequency: Math.random() * seedMultiplier,
-        frequencyMod: (Math.random() * seedFrequencyMod * 2) - seedFrequencyMod,
+        frequency: Math.random() * seedFrequencyMultiplier,
+        frequencyMod: 0,
+        frequencyModTarget: frequencyMod,
         offset: Math.random(),
-        offsetMod: (Math.random() * seedOffsetMod * 2) - seedOffsetMod
+        offsetMod: (Math.random() * (seedOffsetMod * 2)) - seedOffsetMod,
     };
 }
 
@@ -71,33 +128,48 @@ function generateSeeds() {
 }
 
 function modifySeeds() {
-    const seeds = [xSeedR, xSeedG, xSeedB, ySeedR, ySeedG, ySeedB];
+    // const seeds = [xSeedR, xSeedG, xSeedB, ySeedR, ySeedG, ySeedB];
+    const seeds = [xSeedR, ySeedR];
     for (let seedIndex = 0; seedIndex < seeds.length; seedIndex++) {
         for (let seedPartIndex = 0; seedPartIndex < seeds[seedIndex].length; seedPartIndex++) {
             const seed = seeds[seedIndex][seedPartIndex];
             seed.frequency += seed.frequencyMod;
-            if (Math.abs(seed.frequency) >= seedMultiplier) {
-                seed.frequencyMod = -seed.frequencyMod;
+
+            // if (Math.abs(seed.frequency) >= maxFrequency
+            //     ||
+            if (Math.abs(seed.frequencyMod - seed.frequencyModTarget) < seedFrequencyModTransitionRange) {
+                // if (seedIndex === 0 && seedPartIndex === 0)
+                //     console.log("(" + seedIndex + ", " + seedPartIndex + "): "
+                //         + seed.frequencyMod + " -> " + seed.frequencyModTarget);
+                seed.frequencyModTarget = -seed.frequencyModTarget;
             }
+
+            seed.frequencyMod = ((seed.frequencyMod * seedFrequencyModTransitionFrequencyWeight)
+                    + (seed.frequencyModTarget * seedFrequencyModTransitionTargetWeight))
+                / (seedFrequencyModTransitionFrequencyWeight + seedFrequencyModTransitionTargetWeight);
+            // if (seedIndex === 0 && seedPartIndex === 0)
+            //     console.log("(" + seedIndex + ", " + seedPartIndex + "): "
+            //         + seed.frequencyMod + " -> " + seed.frequencyModTarget);
+
             seed.offset += seed.offsetMod;
         }
     }
 }
 
-function evaluateValue(x, y) {
+function evaluateValue1(x, y) {
     let xValue = {r: 0, rL: 0, g: 0, gL: 0, b: 0, bL: 0};
     for (let xSeedIndex = 0; xSeedIndex < xSeedR.length; xSeedIndex++) {
-        xValue.r += Math.sin((x / xSeedR[xSeedIndex].frequency) + xSeedR[xSeedIndex].offset) / ((xSeedIndex * seedFalloff) + 1);
-        xValue.rL += 1 / ((xSeedIndex * seedFalloff) + 1);
+        xValue.r += Math.sin((x / xSeedR[xSeedIndex].frequency) + xSeedR[xSeedIndex].offset) / ((xSeedIndex * subSeedFalloff) + 1);
+        xValue.rL += 1 / ((xSeedIndex * subSeedFalloff) + 1);
     }
     if (multiChannelSeeds) {
         for (let xSeedIndex = 0; xSeedIndex < xSeedG.length; xSeedIndex++) {
-            xValue.g += Math.sin((x / xSeedG[xSeedIndex].frequency) + xSeedG[xSeedIndex].offset) / ((xSeedIndex * seedFalloff) + 1);
-            xValue.gL += 1 / ((xSeedIndex * seedFalloff) + 1);
+            xValue.g += Math.sin((x / xSeedG[xSeedIndex].frequency) + xSeedG[xSeedIndex].offset) / ((xSeedIndex * subSeedFalloff) + 1);
+            xValue.gL += 1 / ((xSeedIndex * subSeedFalloff) + 1);
         }
         for (let xSeedIndex = 0; xSeedIndex < xSeedB.length; xSeedIndex++) {
-            xValue.b += Math.sin((x / xSeedB[xSeedIndex].frequency) + xSeedB[xSeedIndex].offset) / ((xSeedIndex * seedFalloff) + 1);
-            xValue.bL += 1 / ((xSeedIndex * seedFalloff) + 1);
+            xValue.b += Math.sin((x / xSeedB[xSeedIndex].frequency) + xSeedB[xSeedIndex].offset) / ((xSeedIndex * subSeedFalloff) + 1);
+            xValue.bL += 1 / ((xSeedIndex * subSeedFalloff) + 1);
         }
     }
     xValue = {
@@ -108,17 +180,17 @@ function evaluateValue(x, y) {
 
     let yValue = {r: 0, rL: 0, g: 0, gL: 0, b: 0, bL: 0};
     for (let ySeedIndex = 0; ySeedIndex < ySeedR.length; ySeedIndex++) {
-        yValue.r += Math.sin((y / ySeedR[ySeedIndex].frequency) + ySeedR[ySeedIndex].offset) / ((ySeedIndex * seedFalloff) + 1);
-        yValue.rL += 1 / ((ySeedIndex * seedFalloff) + 1);
+        yValue.r += Math.sin((y / ySeedR[ySeedIndex].frequency) + ySeedR[ySeedIndex].offset) / ((ySeedIndex * subSeedFalloff) + 1);
+        yValue.rL += 1 / ((ySeedIndex * subSeedFalloff) + 1);
     }
     if (multiChannelSeeds) {
         for (let ySeedIndex = 0; ySeedIndex < ySeedG.length; ySeedIndex++) {
-            yValue.g += Math.sin((y / ySeedG[ySeedIndex].frequency) + ySeedG[ySeedIndex].offset) / ((ySeedIndex * seedFalloff) + 1);
-            yValue.gL += 1 / ((ySeedIndex * seedFalloff) + 1);
+            yValue.g += Math.sin((y / ySeedG[ySeedIndex].frequency) + ySeedG[ySeedIndex].offset) / ((ySeedIndex * subSeedFalloff) + 1);
+            yValue.gL += 1 / ((ySeedIndex * subSeedFalloff) + 1);
         }
         for (let ySeedIndex = 0; ySeedIndex < ySeedB.length; ySeedIndex++) {
-            yValue.b += Math.sin((y / ySeedB[ySeedIndex].frequency) + ySeedB[ySeedIndex].offset) / ((ySeedIndex * seedFalloff) + 1);
-            yValue.bL += 1 / ((ySeedIndex * seedFalloff) + 1);
+            yValue.b += Math.sin((y / ySeedB[ySeedIndex].frequency) + ySeedB[ySeedIndex].offset) / ((ySeedIndex * subSeedFalloff) + 1);
+            yValue.bL += 1 / ((ySeedIndex * subSeedFalloff) + 1);
         }
     }
     yValue = {
@@ -134,19 +206,76 @@ function evaluateValue(x, y) {
     };
 }
 
+function getColorFraction(color, fraction) {
+    return {
+        r: color.r * fraction,
+        g: color.g * fraction,
+        b: color.b * fraction,
+    };
+}
+
+// Value must be a number between 0 and 1
+function blackAndWhiteToColor(value) {
+    let value2 = value * (colorSteps.length - 1);
+    let fromColor = colorSteps[Math.floor(value2)];
+    let toColor = colorSteps[Math.ceil(value2)];
+
+    let rem = value2;
+    while (rem > 1) rem -= 1;
+
+    if (fromColor === undefined || toColor === undefined) {
+        console.log("fuck");
+        return {
+            r: 0,
+            g: 0,
+            b: 0,
+        };
+    }
+
+    let c1 = getColorFraction(fromColor, 1 - rem);
+    let c2 = getColorFraction(toColor, rem);
+
+    return {
+        r: c1.r + c2.r,
+        g: c1.g + c2.g,
+        b: c1.b + c2.b,
+    };
+}
+
+function evaluateValue2(x, y) {
+    let value = 0;
+    let max = 0;
+    for (let i = 0; i < 2; i++) {
+        let falloff = ((i * subSeedFalloff) + 1);
+        let frequencyMultiplier = subSeedFrequencyMultiplier * i + 1
+        value += (Math.cos(
+                ((xSeedR[i].frequency * frequencyMultiplier) * x) + xSeedR[i].offset
+            ) / falloff)
+            * (Math.sin(
+                ((ySeedR[i].frequency * frequencyMultiplier) * y) + ySeedR[i].offset
+            ) / falloff);
+        max += 1 / falloff;
+    }
+
+    value /= max;
+
+    return blackAndWhiteToColor((value + 1) / 2);
+}
+
 function addColor(pixels) {
     for (let y = 0; y < pixels.length; y++) {
         for (let x = 0; x < pixels[y].length; x++) {
-            setColor(x, y, evaluateValue(x, y), pixels);
+            // setColor(x, y, evaluateValue1(x, y), pixels);
+            setColor(x, y, evaluateValue2(x, y), pixels);
         }
     }
 }
 
 function setColor(x, y, value, pixels) {
     pixels[y][x] = {
-        r: value.r * 255,
-        g: value.g * 255,
-        b: value.b * 255,
+        r: Math.round(value.r * 255),
+        g: Math.round(value.g * 255),
+        b: Math.round(value.b * 255),
         a: 255
     }
 }
