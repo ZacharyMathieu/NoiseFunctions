@@ -16,24 +16,24 @@ const outFile = "out";
 // const generateImageCount = 100;
 const generateImageCount = 4200;
 
-const maxFrequency = 0.005;
+const maxFrequency = 0.01;
 
 // Black and white: false, colors: true
 const multiChannelSeeds = false;
 // Between 1 and 10 (greatly affects performance)
 const seedCount = 10;
 // Between 1 and width or 1 and height
-const seedFrequencyMultiplier = 0.005;
+const seedFrequencyMultiplier = maxFrequency / 2;
 // How much the frequency can change between each image
 // Between 0 and seedFrequencyMultiplier / 100 for better results
 const seedFrequencyMod = seedFrequencyMultiplier / 50;
 // How close the frequencyMod needs to be to the target to trigger a switch
 const seedFrequencyModTransitionRange = maxFrequency / 500;
-const seedFrequencyModTransitionFrequencyWeight = 50;
+const seedFrequencyModTransitionFrequencyWeight = 20;
 const seedFrequencyModTransitionTargetWeight = 1;
 // How much the offset can change between each image
 // Between 0 and 0.25 for better results
-const seedOffsetMod = seedFrequencyMod / 2;
+const seedOffsetMod = 0.1;
 // Between 0 and infinity for smaller changes from seeds after the first one
 const subSeedFalloff = 0.5;
 // Between 0 and infinity for smaller changes from seeds after the first one
@@ -86,17 +86,51 @@ const colorSteps = [
         g: 0,
         b: 0
     },
+    {
+        r: 1,
+        g: 1,
+        b: 0
+    },
+    {
+        r: 0,
+        g: 1,
+        b: 0
+    },
+    {
+        r: 0,
+        g: 1,
+        b: 1
+    },
+    {
+        r: 0,
+        g: 0,
+        b: 1
+    },
+    {
+        r: 1,
+        g: 0,
+        b: 1
+    },
+    {
+        r: 1,
+        g: 0,
+        b: 0
+    },
 ];
 
 function getSeed() {
-    let frequencyMod = (Math.random() * (seedFrequencyMod * 2)) - seedFrequencyMod
     return {
         frequency: Math.random() * seedFrequencyMultiplier,
         frequencyMod: 0,
-        frequencyModTarget: frequencyMod,
+        frequencyModTarget: (Math.random() * (seedFrequencyMod * 2)) - seedFrequencyMod,
         offset: Math.random(),
         offsetMod: (Math.random() * (seedOffsetMod * 2)) - seedOffsetMod,
     };
+}
+
+function setNewFrequencyModTarget(seed) {
+    // seed.frequencyModTarget = (Math.random() * (seedFrequencyMod * 2)) - seedFrequencyMod;
+    seed.frequencyModTarget = -seed.frequencyModTarget;
 }
 
 let xSeedR = [];
@@ -135,13 +169,13 @@ function modifySeeds() {
             const seed = seeds[seedIndex][seedPartIndex];
             seed.frequency += seed.frequencyMod;
 
-            // if (Math.abs(seed.frequency) >= maxFrequency
-            //     ||
-            if (Math.abs(seed.frequencyMod - seed.frequencyModTarget) < seedFrequencyModTransitionRange) {
-                // if (seedIndex === 0 && seedPartIndex === 0)
-                //     console.log("(" + seedIndex + ", " + seedPartIndex + "): "
-                //         + seed.frequencyMod + " -> " + seed.frequencyModTarget);
-                seed.frequencyModTarget = -seed.frequencyModTarget;
+            if (Math.abs(seed.frequency) >= maxFrequency) {
+                console.log("switch! (" + seedPartIndex + ")")
+                setNewFrequencyModTarget(seed);
+                seed.frequencyMod = -seed.frequencyMod;
+            } else if (Math.abs(seed.frequencyMod - seed.frequencyModTarget) < seedFrequencyModTransitionRange) {
+                // seed.frequencyModTarget = -seed.frequencyModTarget;
+                setNewFrequencyModTarget(seed);
             }
 
             seed.frequencyMod = ((seed.frequencyMod * seedFrequencyModTransitionFrequencyWeight)
