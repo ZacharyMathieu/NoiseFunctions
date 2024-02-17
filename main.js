@@ -2,7 +2,7 @@ const sharp = require("sharp");
 const fs = require("fs");
 const {exec} = require("child_process");
 
-if (process.argv[2] === undefined) throw SyntaxError("Action specification required (new/load/video)");
+if (process.argv[2] === undefined) throw SyntaxError("Action specification required (new/load/video/rename)");
 
 const newSeedMode = process.argv[2] === "new";
 const loadSeedMode = process.argv[2] === "load";
@@ -13,38 +13,38 @@ const startIndex = process.argv[3] ?? 0;
 
 const outFile = "out";
 
-// const generateImageCount = 100;
-const generateImageCount = 4200;
+const generateImageCount = 200;
+// const generateImageCount = 5940;
 
-const maxFrequency = 0.01;
+const maxFrequency = 0.5;
 
 // Black and white: false, colors: true
 const multiChannelSeeds = false;
 // Between 1 and 10 (greatly affects performance)
-const seedCount = 10;
+const seedCount = 2;
 // Between 1 and width or 1 and height
 const seedFrequencyMultiplier = maxFrequency / 2;
 // How much the frequency can change between each image
 // Between 0 and seedFrequencyMultiplier / 100 for better results
-const seedFrequencyMod = seedFrequencyMultiplier / 50;
+const seedFrequencyMod = seedFrequencyMultiplier / 100;
 // How close the frequencyMod needs to be to the target to trigger a switch
 const seedFrequencyModTransitionRange = maxFrequency / 500;
+// ??? God know what this means and what it does exactly
 const seedFrequencyModTransitionFrequencyWeight = 20;
+// ????? Excellent naming scheme right here
 const seedFrequencyModTransitionTargetWeight = 1;
 // How much the offset can change between each image
 // Between 0 and 0.25 for better results
-const seedOffsetMod = 0.1;
+const seedOffsetMod = 0.01;
 // Between 0 and infinity for smaller changes from seeds after the first one
-const subSeedFalloff = 0.5;
+const subSeedFalloff = 0;
 // Between 0 and infinity for smaller changes from seeds after the first one
-const subSeedFrequencyMultiplier = 5;
+const subSeedFrequencyMultiplier = 1;
 
-const width = 1000;
-const height = 1000;
-// const width = 100;
-// const height = 100;
+const width = 2000;
+const height = 50;
 
-const finalVideoPath = `${outFile}/videoOut.mp4`;
+const finalVideoPath = `${outFile}/videOut.mp4`;
 const frameRate = 30;
 
 // const frameRate = 50;
@@ -384,12 +384,19 @@ async function generateVideo() {
 
             console.log("loading seeds from file");
 
+            // xSeedR = seeds["xSeedR"];
+            // xSeedG = seeds["xSeedG"];
+            // xSeedB = seeds["xSeedB"];
+            // ySeedR = seeds["ySeedR"];
+            // ySeedG = seeds["ySeedG"];
+            // ySeedB = seeds["ySeedB"];
+
             xSeedR = seeds["xSeedR"];
-            xSeedG = seeds["xSeedG"];
-            xSeedB = seeds["xSeedB"];
-            ySeedR = seeds["ySeedR"];
-            ySeedG = seeds["ySeedG"];
-            ySeedB = seeds["ySeedB"];
+            xSeedG = seeds["xSeedR"];
+            xSeedB = seeds["xSeedR"];
+            ySeedR = seeds["xSeedR"];
+            ySeedG = seeds["xSeedR"];
+            ySeedB = seeds["xSeedR"];
         }
 
         const requiredOutputLength = generateImageCount.toString().length;
